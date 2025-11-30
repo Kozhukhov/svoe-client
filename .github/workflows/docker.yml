@@ -48,6 +48,13 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest,enable={{is_default_branch}}
             type=sha,prefix={{branch}}-
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix={{branch}}-
       
       - name: Build Docker image (for testing)
         if: github.event_name == 'pull_request'
@@ -75,22 +82,28 @@ jobs:
           # Для PR тестируем локальный образ, для push - скачанный из registry
           if [ "${{ github.event_name }}" == "pull_request" ]; then
             IMAGE_TAG="svoe-client:test"
+            echo "Testing local build for PR..."
           else
-            IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.ref_name }}"
+            IMAGE_TAG="${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:main"
+            echo "Pulling and testing published image..."
             docker pull $IMAGE_TAG
           fi
-          
+
+          echo "Starting container..."
           docker run -d -p 3000:3000 --name test-container $IMAGE_TAG
+
+          echo "Waiting for application to start..."
           sleep 15
-          
+
           echo "Testing health endpoint..."
           curl -f http://localhost:3000/api/health || exit 1
-          
+
           echo "Testing hello endpoint..."
           curl -f http://localhost:3000/api/hello?name=CI || exit 1
-          
+
+          echo "Stopping container..."
           docker stop test-container
           docker rm test-container
-          
+
           echo "✅ All tests passed!"
 
